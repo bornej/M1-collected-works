@@ -1,0 +1,33 @@
+Travaux réalisés lors de ma première année de master 
+en Informatique à l'IM2AG, Université Grenoble Alpes.
+
+# Introduction to Operating Systems :
+# Enseignants: Vincent Danjean & Vania Marangozova-Martin:
+
+- Memory allocator: Un petit allocateur mémoire implémentant 
+	les opérations mem_alloc (malloc), mem_free avec une politique
+	first_fit. 
+	
+- Buffered IO: Une librairie d'entrée/sortie bufferisées (similaire à 
+	stdlib).
+
+- Lecteurs-Redacteurs: Solution au problème des lecteurs-rédacteurs à 
+	l'aide des primitives de synchronisation de la librairie 
+	pthread.
+
+# Introduction to Cryptology :
+# Enseignant: Pierre Karpman:
+# Réalisé en binôme avec Thomas Duverney
+- Siphash: Une implémentation de Siphash et démonstration
+	de recherche de collision.
+
+# Parallel algorithms :
+# Enseignants: Fréderic Desprez, Thomas Ropars, (A completer):
+# Réalisé en binôme avec Maxime Isnel
+- Cannon-Fox: Implémentation des algorithmes de Cannon et Fox pour la 
+multiplication de matrices avec MPI.
+
+- Benchmark Open MP: Evaluation de performances de divers algorithmes 
+	(Mult Matrice vecteur, Tri Bulle, Tri Fusion ...)
+	parallélisés à l'aide d'OpenMP.
+

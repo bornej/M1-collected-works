@@ -1,0 +1,515 @@
+% Created 2017-09-28 Jeu 14:17
+\documentclass[11pt]{article}
+\usepackage[margin=1.6in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{amsmath, amsthm}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{amssymb}
+\usepackage{hyperref}
+% Pour XeTeX
+%\XeTeXdefaultencoding utf-8
+%\usepackage{fontspec}
+
+% Appel usuel à des packages
+\usepackage{listings}
+\usepackage[frenchb]{babel}
+\lstset{
+  %frame=tb,
+  language=Bash,
+  aboveskip=2mm,
+  belowskip=2mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\scriptsize\ttfamily},
+  numbers=none,
+  numberstyle=\footnotesize\color{gray},
+  %keywordstyle=\color{blue},
+  %commentstyle=\color{dkgreen},
+  %stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg
+   \vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup
+   \prevdepth=\tpd}
+
+\usepackage{color}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\theoremstyle{definition}
+\newtheorem*{mydef}{Définition}
+
+\theoremstyle{definition}
+\newtheorem*{myrem}{Remarque}
+
+\tolerance=1000
+\setcounter{secnumdepth}{2}
+\author{Borne}
+\date{}
+\title{TP8: Surcouche d'entrées / sorties}
+\hypersetup{
+  pdfkeywords={},
+  pdfsubject={},
+  pdfcreator={Emacs 25.3.1 (Org mode 8.2.10)}}
+
+
+\begin{document}
+
+\maketitle
+
+
+\section{Fonction \texttt{ouvrir}}
+
+\subsection{Spécification}
+\texttt{FICHIER* ouvrir(char *nom, char mode)}
+
+Prends en paramètre un nom de fichier \texttt{nom} et un caractère \texttt{mode},
+retourne l'adresse d'une structure \texttt{FICHIER}.
+\subsection{Sémantique}
+La fonction \texttt{ouvrir}, utilise l'appel système \texttt{open} pour ouvrir le fichier dont le nom est fourni en paramètre et initie un flux de données en écriture ou en lecture vers/depuis le fichier. La nature du flux est spécifiée par le paramètre
+\texttt{mode} qui peut prendre les valeurs:
+\begin{itemize}
+\item \texttt{'R'} pour un flux en lecture.
+\item \texttt{'W'} pour un flux en écriture.
+\end{itemize}
+La fonction initialise une structure \texttt{FICHIER} contenant:
+\begin{itemize}
+\item Le descripteur du fichier retourné par l'appel système \texttt{open}
+\item Un tampon destiné à envoyer/recevoir des données vers/depuis
+le fichier par blocs d'octet.
+\end{itemize}
+La fonction retourne \texttt{NULL} si l'ouverture de fichier a échoué ou si le mode
+est invalide.
+
+
+
+
+\section{Fonction \texttt{fermer}}
+  \subsection{Spécification}
+  \texttt{int fermer(FICHIER* f)}
+
+  Prends en paramètre l'adresse d'une structure FICHIER.
+
+  \subsection{Sémantique}
+  La fonction \texttt{fermer}, utilise l'appel système \texttt{close} pour fermer le fichier dont le descripteur appartient à la structure \texttt{f}. En cas d'échec la fonction retourne -1.
+  \subsection{Pré-condition}
+  le paramètre \texttt{f} est un pointeur vers une structure \texttt{FICHIER}
+  retournée par la fonction \texttt{ouvrir}.
+  \subsection{Post-condition}
+  Les données présentes dans le buffer de la structure sont écrites dans le fichier
+  dont le descripteur est \texttt{f->file}.
+  Le fichier est fermé.
+  L'espace mémoire de la structure \texttt{FICHIER} pointée par \texttt{f}
+  est libéré.
+
+
+
+
+
+\section{Fonction \texttt{lire}}
+
+\begin{mydef} On appelle \textit{élément} un bloc d'octets.
+\end{mydef}
+
+\subsection{Spécification}
+\texttt{int lire(void *p, unsigned int taille, unsigned int nbelem, FICHIER *f)}
+
+Prends en paramètre:
+\begin{itemize}
+\item Une adresse \texttt{p} où stocker les éléments lus.
+\item Un entier positif \texttt{taille} qui détermine la taille d'un élément à lire
+  en nombre d'octets.
+\item Un entier positif \texttt{nbelem} qui correspond au nombre d'éléments à lire depuis
+  le fichier.
+\item L'adresse d'une structure \texttt{FICHIER}.
+\end{itemize}
+
+\subsection{Sémantique}
+La fonction lire, lis un nombre d'éléments \texttt{nbelem} depuis le fichier dont le descripteur
+appartient à la structure \texttt{f} fournie en paramètre.
+Un élément est un 'bloc' d'octet dont la taille est spécifiée par le paramètre
+\texttt{taille}.
+Les éléments lus sont stockés à l'adresse \texttt{p} fournie en paramètre.
+Retourne le nombre d'éléments lus en cas de succès, $-1$ en cas d'échec.
+\begin{myrem}
+  Si $nbelem*taille > taille\_fichier$ (en octets).
+  On lit le nombre maximum possible d'éléments que le fichier peut contenir.
+\end{myrem}
+
+\subsection{Mise en oeuvre}
+On calcule le nombre total d'octets que l'on doit lire dans le fichier.
+On itère l'opération suivante.
+Tant que l'on a pas lu \texttt{nb\_total\_octets\_a\_lire}:
+On remplit le buffer de la structure \texttt{FICHIER} passée en paramètre
+avec un appel \texttt{read(File, buffer, BUFFER\_SIZE)} puis on procède à la lecture des
+octets depuis ce buffer.
+
+\subsection{Pré-condition}
+Le paramètre \texttt{f} est un pointeur vers une structure \texttt{FICHIER} valide retournée par
+la fonction ouvrir avec le mode \texttt{'R'} (lecture).
+Suffisamment d'espace doit être disponible à l'adresse \texttt{p} pour stocker les données lues.
+
+\subsection{Post-condition}
+Les \texttt{nbelem} éléments lus depuis le fichier
+décrit par le descripteur \texttt{f->file} sont stockés à l'adresse \texttt{p}.     
+
+\subsection{Valeur retour}
+Nombre d'éléments lus ou $-1$ si échec lors de la lecture.
+
+\subsection{Illustrations}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  Exemple 1: Lectures successives de 16 octets dans un fichier:
+  On ouvre le fichier File avec ouvrir().
+  On appelle la fonction lire(p, 1, 16, File) une première fois.
+
+  +--              buffer               --+
+  |---------------------------------------|-----------...-----------+
+  |<-           BUFFER_SIZE             ->|                         | File
+  |-----------------------^---------------|-----------...-----------+
+  +--                     |             --+
+  ^                       |
+  +--- nb_octets_a_lire --+
+\end{lstlisting}
+
+\begin{absolutelynopagebreak}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  a) On a (nb_octets_buffer = 0) => On remplis le buffer:
+  nb_octets_buffer = Read(File, Buffer, BUFFER_SIZE)
+
+  +--              buffer               --+
+  |---------------------------------------|-----------...-----------+
+  |<-         nb_octets_buffer          ->|                         | File
+  |-----------------------^---------------|-----------...-----------+
+  +--                     |             --+
+  ^                       |               ^
+  +--- nb_octets_a_lire --+               |
+                                          +
+                                     lseek(File, 0, SEEK_CUR)
+\end{lstlisting}
+\end{absolutelynopagebreak}
+
+\begin{absolutelynopagebreak}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  b) On lis les nb_octets_a_lire_buffer_courant et on les écrit en mémoire à
+  l'adresse p.
+  A l'issue de la lecture la structure FICHIER est dans l'état suivant:
+
+  +--              buffer               --+
+  |---------------------------------------|-----------...-----------+
+  |///////////////////////|<-n_oct_n_lus->|                         | File
+  |-----------------------^---------------|-----------...-----------+
+  +--                     |             --+
+                          +               ^
+                    offset_buffer         |
+                                          +
+                                      lseek(File, 0, SEEK_CUR)
+
+  Remarque: offset_buffer est la position du dernier octet du buffer courant lu et écrit
+  en mémoire.
+\end{lstlisting}
+\end{absolutelynopagebreak}
+
+  \begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  c) On Appelle une nouvelle fois la fonction lire(p, 1, 16, File):
+
+  +--              buffer               --+
+  |---------------------------------------|-------<---...-----------+
+  |///////////////////////|<-n_oct_n_lus->|       <                 | File
+  |-----------------------^---------------|-------^---...-----------+
+  +--                     |             --+       |
+                          +--- nb_octets_a_lire --+
+
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  d) On lis les nb_octets_non_lus_buffer depuis le buffer et on les stocke
+  à l'adresse p.
+  A l'issue de la lecture la structure FICHIER est dans l'état suivant:
+
+  +--              buffer               --+
+  |---------------------------------------|-------<---...-----------+
+  |///////////////////////////////////////|       <                 | File
+  |---------------------------------------|-------^---...-----------+
+  +--                                   --+       |
+                                          ^- n_o -+
+                                          |
+                                          +
+                                    offset_buffer
+  Remarque: n_o = nb_octets_a_lire
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  e) On a plus aucun élément à lire dans le buffer courant donc on remplit
+  le buffer avec les données suivantes du fichier.
+
+                                 +--              buffer          --+
+  +------------------------------|-------<---...-----------+        |
+  |//////////////////////////////|<-  nb_octets_buffer   ->| File   |
+  +------------------------------|-------^---...-----------+        |
+                                 +--     |                 ^      --+
+                                 ^- n_o -+                 |
+                                 |                         +
+                                 +                     lseek(File, 0, SEEK_CUR)
+                                    global_offset
+
+  Remarque: global_offset est la position du dernier octet du fichier
+  lu et écrit en mémoire.
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  f) On lis les n_o octets restant à lire depuis le buffer courant et on
+  les stocke à l'adresse p.
+  A l'issue de la lecture la structure FICHIER est dans l'état suivant:
+
+
+                                +--              buffer          --+
+  +-----------------------------|-----------...-----------+        |
+  |/////////////////////////////|///////|<- n_oct_n_lus ->| File   |
+  +-----------------------------|-------^---...-----------+        |
+                                +--     |                        --+
+                                        +
+                                  global_offset
+\end{lstlisting}
+
+
+
+
+
+
+\section{Fonction \texttt{écrire}}
+\subsection{Spécification}
+\texttt{int ecrire(const void *p, unsigned int taille, unsigned int nbelem, FICHIER *f)}
+
+Prends en paramètres:
+\begin{itemize}
+\item Une adresse \texttt{p} où sont stockées les données à écrire.
+\item Un entier positif \texttt{taille} indiquant la taille en nombre d'octets d'un élément à lire.
+\item entier positif \texttt{nbelem} indiquant le nombre d'éléments à lire.
+\item L'adresse \texttt{f} d'une structure de type \texttt{FICHIER}.
+\end{itemize}
+
+\subsection{Sémantique et mise en oeuvre}
+Écrit \texttt{nbelem} éléments dans le fichier \texttt{f->file}. L'écriture s'effectue par l'intermédiaire
+du buffer de la structure \texttt{f}. On écrit les données du buffer dans le fichier seulement quand le
+buffer est plein ou que l'on ferme le fichier à l'aide de la fonction \texttt{fermer()}.
+
+\subsection{Pré-conditions}
+le paramètre \texttt{f} est un pointeur vers une structure \texttt{FICHIER} valide retournée par
+la fonction ouvrir avec le mode \texttt{'W'} (écriture). \texttt{p} pointe vers une zone mémoire
+contenant au moins \texttt{nbelem} éléments.
+
+\subsection{Post-conditions}
+Les \texttt{nbelem} éléments lus à l'adresse \texttt{p} sont soit écrits dans le fichier dont le descripteur
+est \texttt{f->file} soit dans la mémoire tampon de la structure \texttt{f} en attente d'être écrits.
+Attention, si, après son utilisation, le fichier \texttt{f} n'est pas fermé de manière approprié en appelant la fonction \texttt{fermer(f)}
+les données présentes dans le buffer seront perdues.
+
+\subsection{Valeur de retour}
+Le nombre d'éléments écrits ou -1 en cas d'échec d'écriture.
+
+
+
+
+
+
+\section{Fonction \texttt{fecriref}}
+\subsection{Spécification}
+\texttt{int fecriref (FICHIER *fp, char *format,...)}
+
+Prends en paramètres:
+\begin{itemize}
+\item L'adresse f d'une structure de type FICHIER.
+\item Une chaîne de caractères "format".
+\item Une liste de données formatées optionnelle.
+\end{itemize}
+
+\subsection{Chaîne "format" et paramètres optionnels}
+La chaîne format est une séquence de caractères destinée à être écrite dans le
+fichier décrit par la structure fp. Cette séquence peut contenir les mots spéciaux
+suivants: "\%s", "\%c", "\%d". Chaque occurrence d'un de ces mots est substituée,
+lors de l'écriture dans le fichier, par la valeur d'une donnée passée en option et
+dont le type correspond au type associé au mot.
+
+\subsection{Types/formats des données en paramètre}
+Les types/formats des données optionnelles sont interprétés selon
+l'utilisation des marqueurs \%c \%s ou \%d dans la chaîne de caractère "format"
+passée en paramètre.
+\begin{itemize}
+\item \%c : caractère
+\item \%s : chaîne de caractères
+\item \%d : entier
+\end{itemize}
+
+\subsection{Pré-conditions}
+\begin{enumerate}
+\item Le paramètre f est un pointeur vers une structure FICHIER valide retournée par
+la fonction ouvrir avec le mode "W" (écriture).
+\item Si des données formatées sont fournies dans les paramètres optionnels:
+  Il doit exister une correspondance bi-univoque entre les données formatées
+  passées en paramètre et les formats spécifiés dans la chaîne format.
+  En particulier:
+  \begin{itemize}
+  \item Si dans la chaîne "format" on trouve n mots spéciaux "%x" (x dans {s,c,d})
+    on doit avoir n données formatées en paramètres.
+  \item L'ordre et le type des formats spécifiés dans la chaîne format doit correspondre
+    à l'ordre et au type des données. (voir exemples)
+  \end{itemize}
+\end{enumerate}
+
+\subsection{Exemples}
+\begin{itemize}
+\item \texttt{fecriref(file, "\%c", 'c')} écrit dans le fichier \texttt{file} la valeur \texttt{ASCII}
+  du caractère 'c'.
+\item \texttt{fecriref(file, "\%s", "exemple")} écrit dans le fichier \texttt{file}
+  la chaine "exemple".
+\item \texttt{fecriref(file, "\%d", 1245)} écrit dans le fichier la représentation \texttt{ASCII}
+  de l'entier 1245 i.e la chaîne de caractère "1245".
+\item \texttt{fecriref(file, "texte \%d \%s", 45, "fin texte")} écrit dans \texttt{file} la chaîne texte
+  suivie de la représentation \texttt{ASCII} de l'entier 45 suivie de la chaîne "fin texte".
+\item \texttt{fecriref(file, "\%d \%s", "texte", 45)}: l'ordre des données ne correspond pas
+  au format spécifié -> comportement non spécifié.
+\end{itemize}
+
+\subsection{Mise en oeuvre}
+Dans la chaîne de caractère "format" on distingue deux types de caractères.
+Les caractère normaux qui sont écrits directement dans le fichier et les
+caractères spéciaux '\%' qui permettent d'insérer des données formatées
+fournies dans les arguments optionnels. On utilise l'automate d'état fini
+suivant pour lire, caractère par caractère, la chaîne \texttt{format} et traiter
+si besoin les données formatées à insérer dans le fichier:
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     +-------+  +--------------------------------------+
+     |'*'/(1)|  |               '%'/_nil               |
+     |   +---+--+-----+                        +-------v------+
+     +-->|REGULAR_CHAR|                        |    FORMAT    |
+         +------^-----+                        +-------+------+
+                |     'd'/(2) || 's'/(3) || 'c'/(4)    |
+                +--------------------------------------+
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     Légende:
+       - char / (x): lit l'entrée char et exécute l'action x.
+       - -->: transitions.
+       - '*': tout caractère sauf '%'.
+     Actions:
+       - (1): écrit le caractère courant de la chaîne "format" dans le fichier.
+       - (2): récupère la prochaine donnée (qui doit être un entier)
+              dans la liste des arguments optionnels et écrit sa représentation ASCII
+              dans le fichier.
+       - (3): récupère la prochaine donnée (qui doit être une chaîne de caractères)
+              dans la liste des arguments optionnels et l'écrit dans le fichier.
+       - (4): récupère la prochaine donnée (qui doit être un caractère)
+              dans la liste des arguments optionnels et l'écrit dans le fichier.
+\end{lstlisting}
+
+
+
+
+
+
+\section{Fonction \texttt{fliref}}
+\begin{mydef} On appelle \textit{caractère normal} tout caractère n'étant pas un espace ou le caractère '\%'.
+\end{mydef}
+\subsection{Spécifications}
+\texttt{int fliref (FICHIER *fp, char *format,...)}
+
+Prends en paramètres:
+\begin{itemize}
+  \item L'adresse \texttt{f} d'une structure de type \texttt{FICHIER}.
+  \item Une chaîne de caractères \texttt{format}.
+  \item Une liste optionnelle de pointeurs.
+\end{itemize}
+
+\subsection{Sémantique}
+Lis depuis le fichier représenté par la structure \texttt{fp}, un ensemble de données
+dont le format attendu est spécifié dans la chaîne \texttt{format}. Les données lues
+sont stockées aux adresses de pointeurs passés en option à la fonction.
+
+\subsection{Chaîne \texttt{format}}
+La chaîne format est une séquence de caractères décrivant le format des données
+que l'on s'attend à lire dans le fichier \texttt{fp}. Cette séquence peut contenir
+les mots spéciaux suivants: \texttt{"\%s"}, \texttt{"\%c"}, \texttt{"\%d"} des caractères \texttt{ASCII} normaux
+et des caractères espaces ' '.
+Les types/formats des données sont interprétés par
+l'utilisation des mots \%c \%s ou \%d dans la chaîne de caractère \texttt{format}.
+passée en paramètre.
+
+\subsubsection{\%c : caractère}
+On lit un unique caractère dans le fichier.
+\subsubsection{\%s : chaîne de caractères}
+On lit une séquence de caractères non \texttt{' '} (espace).
+\subsubsection{\%d : entier}
+On lit une séquence de caractères décimaux depuis le fichier.
+
+\subsubsection{Caractères normaux et espaces}
+La présence d'un caractère espace dans la chaîne format signifie que l'on
+s'attend à lire un ou plusieurs espaces dans le fichier.
+La présence d'un caractère \texttt{ASCII} 'normal' signifie que l'on s'attend à lire
+le caractère en question dans le fichier.
+
+\subsection{Pré-conditions}
+\begin{enumerate}
+    \item Le paramètre \texttt{f} est un pointeur vers une structure \texttt{FICHIER} valide retournée par
+      la fonction \texttt{ouvrir} avec le mode \texttt{L} (lecture).
+    \item Il doit exister une correspondance bi-univoque entre les mots spéciaux (%x)
+      présents dans la chaîne format et les pointeurs passés en paramètres optionnels.
+      En particulier:
+      \begin{itemize}
+      \item Si dans la chaîne \texttt{format} on trouve $n$ mots spéciaux "\%$x$" ,$x \in \{s,c,d\}$
+      on doit avoir $n$ pointeurs de type correspondant en paramètre.
+      \item L'ordre et le type des formats spécifiés doit correspondre à l'ordre et
+      au type des pointeurs passées en paramètres.
+      \end{itemize}
+    \item L'ordre des types de données spécifiés dans la chaîne \texttt{format} doit correspondre
+      à l'ordre dans lequel on rencontre les types de données dans le fichier.
+\end{enumerate}
+
+\subsection{Post-conditions}
+Les données formatées lues depuis le fichier sont stockées aux adresses des
+pointeurs fournis en paramètre.
+
+\subsection{Valeur de retour}
+Nombre de caractères lus depuis le fichier ou -1 en cas d'échec de la lecture.
+
+\section{Tests}
+Nous avons fourni dans le répertoire \texttt{Tests} un ensemble de programmes que l'on peut compiler et exécuter à l'aide de la commande
+\texttt{make tests}. L'ensemble des fonctions implémentées sont testées dans ces programmes, dans différentes cas d'utilisation
+(ouverture, lecture fichier, écriture, fermeture, ...).
+
+\section{Pistes d'améliorations}
+Nous souhaiterions en premier lieu améliorer notre méthodologie lors des procédures de test par l'utilisation d'un framework de test unitaires.
+Nous allons essayer d'investir le temps nécessaire à la mise en place d'outils de test plus efficaces pour nos développements futurs.
+D'autre part la fonction \texttt{fliref} comporte, pour la gestion des entiers dans la chaîne \texttt{format}, un traitement itératif
+dont l'écriture devrait être factorisée (traitement du signe en dehors de la boucle) et simplifiée
+(condition i==1 dans la terminaison). Le code présenté ici souffre de nombreuses lacunes qui mériteraient d'êtres corrigées.
+Les fonctions ne sont pas thread-safe. Le comportement du buffer d'écriture pourrait être modifié pour forcer l'écriture dans
+le fichier lorsqu'un caractère de retour à la ligne est rencontré en entrée. Les invariants de boucles devrait êtres énoncés.
+La correction des fonctions \texttt{fliref} et \texttt{fecriref} n'est pas parfaitement garantie dans l'état actuel.
+Bien que nos tests indiquent des résultats positifs ceux-ci devraient être refondus pour traiter plus de cas et mettre en avant
+les situations pathologiques.
+
+\section{Conclusions}
+Nous avons adopté un style de programmation par contrat, et avons essayé de
+spécifier au mieux l'utilisation attendue de nos fonctions par l'utilisateur en vue d'un résultat correct.
+Nous avons essayé de fournir une documentation lisible et exhaustive. Nous avons perçu sur ces fonctions
+simples certaines difficultés à énumérer les différents cas à traiter lors de la lecture ou l'écriture
+de données formatées dans un fichier. Nous avons apprécié travailler sur ce sujet et espérons avoir fourni une
+documentation agréable à lire.
+
+\end{document}

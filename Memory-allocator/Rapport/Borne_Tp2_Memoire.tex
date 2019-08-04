@@ -1,0 +1,360 @@
+% Created 2017-09-28 Jeu 14:17
+\documentclass[11pt]{article}
+\usepackage[margin=1.6in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{amsmath, amsthm}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{amssymb}
+\usepackage{hyperref}
+% Pour XeTeX
+\XeTeXdefaultencoding utf-8
+\usepackage{fontspec}
+
+% Appel usuel à des packages
+\usepackage{listings}
+\usepackage[frenchb]{babel}
+\lstset{
+  %frame=tb,
+  language=Bash,
+  aboveskip=2mm,
+  belowskip=2mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\scriptsize\ttfamily},
+  numbers=none,
+  numberstyle=\footnotesize\color{gray},
+  %keywordstyle=\color{blue},
+  %commentstyle=\color{dkgreen},
+  %stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true
+  tabsize=3
+}
+
+\newenvironment{absolutelynopagebreak}
+  {\par\nobreak\vfil\penalty0\vfilneg
+   \vtop\bgroup}
+  {\par\xdef\tpd{\the\prevdepth}\egroup
+   \prevdepth=\tpd}
+
+\usepackage{color}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\theoremstyle{definition}
+\newtheorem*{mydef}{Définition}
+
+\tolerance=1000
+\setcounter{secnumdepth}{2}
+\author{Borne}
+\date{}
+\title{TP2: Mémoire}
+\hypersetup{
+  pdfkeywords={},
+  pdfsubject={},
+  pdfcreator={Emacs 25.3.1 (Org mode 8.2.10)}}
+
+
+\begin{document}
+
+\maketitle
+\section{Structure}
+
+\begin{mydef} On appelle \textit{zone libre} un espace contigu d'adresses non utilisées.
+\end{mydef}
+\begin{mydef}
+ On appelle \textit{bloc alloué} un espace contigu d'adresses réservées.
+\end{mydef}
+Afin de pouvoir connaître à tout moment l'état de la mémoire, notre allocateur
+maintient une structure de liste doublement chaînée repérant le début des zones libres.
+L'ajout d'un lien vers la cellule précédente facilite le parcours de la liste et la fusion de cellules lors
+des opérations de libération.
+
+On place au début de chaque zone libre une cellule de type \texttt{struct fb} définie comme suit:
+
+\begin{lstlisting}[language=C,columns=fixed,basicstyle=\scriptsize\ttfamily]
+  struct fb {
+    size_t size;
+    struct fb* next;
+    struct fb* prev;
+  };
+\end{lstlisting}
+
+En plus de la liste, au début de chaque bloc alloué, nous sauvegardons la taille de ce bloc.
+Enfin, nous réservons au tout début de la mémoire un emplacement "protégé" contenant
+un lien vers la première cellule de la liste.
+
+Ces informations suffisent pour connaître à tout moment l'état de la mémoire et la parcourir.
+
+\section{Allocation}
+\texttt{mem\_alloc}:
+\begin{itemize}
+\item[]Spécification: \texttt{void*  mem\_alloc(size\_t size)}
+\item[]Sémantique: \texttt{mem\_alloc(size)} alloue un bloc mémoire de taille $t$ tel que:
+  $$t = max(\text{\texttt{sizeof(struct fb)}, \texttt{size} + \texttt{sizeof(size\_t)}})$$
+  Si aucune zone mémoire ne permet l'allocation, la fonction retourne NULL.
+\end{itemize}
+\subsection{Taille minimale d'allocation}
+Lors d'une allocation, on ajoute au début du bloc mémoire alloué un élément de type \texttt{size\_t} qui stocke la taille de la zone.
+Pour executer \texttt{mem\_alloc(s)} il faut que \texttt{first\_fit} cherche une zone libre de taille $t$ avec
+$$t >= s + \text{\texttt{sizeof(size\_t)}}$$
+
+Supposons maintenant que la taille du bloc alloué $b$ soit inférieure à \texttt{sizeof(struct fb)}.
+Lors d'une éventuelle libération de $b$ par \texttt{mem\_free(\&b)}, on va se retrouver
+avec une zone libre que l'on va vouloir repérer par une nouvelle cellule de type \texttt{struct\_fb}.
+Malheureusement il n'y aura pas assez de place dans la zone nouvellement libérée pour stocker une telle cellule.
+Pour remédier à ce problème on peut fixer la taille minimum d'un bloc alloué à \texttt{sizeof(struct fb)}.
+Ainsi, \texttt{mem\_alloc(s)} alloue des blocs de taille $t$ avec
+$$ t = \text{\texttt{mem\_alloc}}(max(s + \text{\texttt{sizeof(size\_t)}}, \text{\texttt{sizeof(struct fb)}})$$
+\subsection{Illustrations}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  Pour l'allocation d'un nouveau bloc on a deux cas possibles:
+  1) Allocation à une position quelconque dans la liste:
+  C.prev  Bloc mémoire
+  +-+    +-------------------------+-----------...----------+-----------+
+  |*| .. | struct fb C = {size, *} |          libre         |///aloué///|
+  +|+    +----------------------|--+-----------...----------+-----------+
+   |      ^                     |
+   |______|                     +----> C.next
+\end{lstlisting}
+
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  a) Déplacement de C à droite du bloc alloué.
+
+   +-+    +----------------------+----------------+---...----+-----------+
+   |*| .. |/////bloc alloué//////| C = {size', *} |  libre   |///aloué///|
+   +|+    +----------------------+-------------|--+---...----+-----------+
+    |      ^                                   |
+    |______|                                   +----> C.next
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  b) Sauvegarde de la taille du bloc et mise à jour de C.prev.next
+
+   +-+    +-+--------------------+----------------+---...----+-----------+
+   |*| .. |s|////bloc alloué/////| C = {size', *} |  libre   |///aloué///|
+   +|+    +-+--------------------+-------------|--+---...----+-----------+
+    |       [~~~~~~ t_bloc ~~~~~] ^            |
+    |_____________________________|            +----> C.next
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  2) Allocation en début de liste:
+
+   Head
+   +---+-------------------------+-----------------------...------------+
+   | * | struct fb C = {size, *} |               libre                  |
+   +-|-+----------------------|--+-----------------------...------------+
+     |  ^                     |
+     |__|                     +---->C.next
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  a) Déplacement de C à droite de la zone allouée .
+
+   +-+----------------------------+---------------------------+-----...-+
+   |*| ////// bloc alloué /////// | struct fb: C = {size', *} | libre   |
+   +|+----------------------------+---------------------------+-----...-+
+    | ^
+    |_|
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  b) Sauvegarde de la taille du bloc et mise à jour de la tête.
+
+   +-+-+--------------------------+--------------------------------...-+
+   |*|s|////// bloc alloué ///////| struct fb: C = {size', *} | libre  |
+   +|+-+--------------------------+------------------------|-------...-+
+    | [~~~~~~~~~~ t_bloc ~~~~~~~~] ^                       |
+    |______________________________|                       +---> C.next
+\end{lstlisting}
+
+
+
+
+
+
+
+\section{Libération}
+\texttt{mem\_free:}
+\begin{itemize}
+\item[] Spécification: \texttt{void mem\_free(void* p)}
+\item[] Pré-condition: \texttt{p} est l'adresse d'un bloc alloué retournée par \texttt{mem\_alloc}.
+\item[] Sémantique: Libère le bloc alloué dont l'adresse \texttt{p} est fournie en paramètre.
+  Crée une nouvelle cellule pour la zone libérée. Met à jour la liste des zones libres et Fusionne deux cellules de liste de zones libres si elles sont adjacentes.
+\end{itemize}
+
+La fusion de cellules est effectuée ``en-place'' après libération. On ne parcourt pas toute la liste des zones libres.
+\subsection{Illustrations}
+\subsubsection{Libération}
+  La méthode de libération d'un bloc varie selon que le bloc se trouve avant le début de la liste de zones vides ou non.
+\begin{absolutelynopagebreak}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  1) Libération avant le début de liste (Head < p < first\_cel\_adr)
+  Head
+  +---+-+---------------+-+----------+---------------------------+-----...-+
+  | * |s|  ///bloc1///  |n| /suite// | struct fb: C = {size', *} | libre   |
+  +-|-+-+^--------------+-+----------+^--------------------------+-----...-+
+    |  [~|~~~~ s ~~~~~~]              |
+    |    p                            |
+    |_________________________________|
+    
+\end{lstlisting}
+\end{absolutelynopagebreak}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  On déplace p en tête du bloc.
+  +-+-+---------------+-+----------+---------------------------+-----...-+
+  |*|s|  ///bloc1///  |n| /suite// | struct fb: C = {size', *} | libre   |
+  +|+^+---------------+-+----------+^--------------------------+-----...-+
+   | |                              |
+   | p                              |
+   |____________________  __________|
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+   On place à l'adresse p une nouvelle cellule de liste de zone vide et on met à jour la liste.
+
+   +-+----------------+-+----------+---------------------------+-----...-+
+   |*| struct A {s,*} |n| /suite// | struct fb: C = {s_c  , *} | libre   |
+   +|+^------------|--+-+----------+^--------------------------+-----...-+
+    |_|            |________________|
+
+    *head <- A;
+    A.size <- s -STRUCT_FB_SIZE; A.next <- C ; A.prev = head;
+    C.prev <- A;
+\end{lstlisting}
+Si deux cellules A et C sont adjacentes après libération on les fusionne (voir section Fusion).
+Dans le cas de la libération avant le début de la liste seul la fusion en avant est à considérer.
+Dans le cas de la libération après le début de liste (firstcel\_adr < p)
+Le bloc à libérer se trouve après la première cellule de la liste de zones vides.
+Similaire au cas 1 mais avec fusions de cellules avant et arrière à considérer.
+   
+\subsubsection{Fusion}
+
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  Fusion avant: Le bloc libéré est suivi par une cellule de zone libre.
+    Exemple de fusion dans le cas 1):
+    +-+--------------+-+------------------+---------------------------+----..-+
+    |*| // alloué // |s|   ///bloc1///    | struct fb: C = {s_c  , *} | libre |
+    +-+--------------+-+^-----------------+---------------------------+----..-+
+                        |
+                        p
+\end{lstlisting}
+
+\begin{absolutelynopagebreak}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+    Après libération du bloc 1 on se retrouve dans la configuration suivante:
+
+    +-+--------------+----------------------+-------------------------+----..-+
+    |*| // alloué // | struct fb: A = {s,*} | struct fb: C = {s_c, *} | libre |
+    +|+--------------+^------------------|--+^---------------------|--+----..-+
+     |________________|                  |___|                     +--------->
+\end{lstlisting}
+\end{absolutelynopagebreak}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     *head <- A;
+     A.size <- s -STRUCT_FB_SIZE; A.next <- C ; A.prev = head;
+     C.prev <- A;
+\end{lstlisting}
+
+\begin{absolutelynopagebreak}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+    On fusionne les cellules A et C et on met à jour la liste;
+
+    +-+--------------+----------------------+------------------------------..-+
+    |*| // alloué // | struct fb: A = {s,*} |            libre                |
+    +|+--------------+^------------------|--+------------------------------..-+
+     |________________|                  +------------> Next
+\end{lstlisting}
+\end{absolutelynopagebreak}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     *head <- A;
+     A.size <- s + s_c + STRUCT_FB_SIZE
+     A.next <- C.next
+     Fusion arrière:
+     Si le bloc libéré est précédé d'une zone libre on fusionne la Cellule précédente
+     avec la cellule A nouvellement crée. Similaire au cas de fusion avant.
+\end{lstlisting}
+
+\section{Tests}
+Dans nos test nous cherchons à remplir et vider la mémoire et retomber sur l'état initial.
+Chaque test affiche l'état de la mémoire après allocation de tous les blocs et à chaque libération.
+
+Nous testons les configurations suivantes:
+\begin{itemize}
+\item[-] Allocations de taille fixe suivies de libérations dans l'ordre inverse.
+\item[-] Allocations de taille fixe suivies de libérations dans un ordre aléatoire.
+\item[-] Allocations de tailles aléatoires suivies de libérations dans un ordre aléatoire.
+\item[-] Enchevêtrement d'allocations aléatoires et libérations aléatoires.
+\end{itemize}
+
+\section{Pistes d'améliorations}
+\texttt{mem\_free} nécessite une factorisation de code.
+Certain invariants de la structure de liste ont étés exploités mais pas prouvés.
+Les programmes de tests fournis utilisent (honteusement) des sections de code partagées d'un fichier à un autre.
+Notre style de programmation peut être largement amélioré, il s'agit d'une première expérience avec le langage C.
+A titre d'exercice nous prévoyons de continuer de nettoyer et maintenir le code et les tests produit.
+
+\section{Conclusions}
+Ce travail nous a permis de nous familiariser avec le langage C et la manipulation de pointeurs.
+Étant donné la nature ``bas niveau'' des objets manipulés (pointeurs) il nous a semblé pertinent d'enrichir le code
+d'illustrations et de commentaires. 
+Nous avons réalisé un allocateur mémoire simpliste (pas de multithread, firstfit, ...) mais fonctionnel.
+Nous avons constaté que le problème d'allocation est un problème bien documenté d'optimisation combinatoire
+proche du problème de sac de voyage et d'empaquetage en-ligne. Nous avons employé une heuristique firstfit naïve
+mais nous souhaiterions comparer les performances de différentes heuristiques (rapidité, fragmentation, ...).
+Nous avons apprécié travailler sur cette introduction à la gestion mémoire et allons continuer à parcourir la littérature
+sur le sujet.
+\section{Annexe}
+\subsection{Charte ASCII}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+  - (*): Un pointeur
+\end{lstlisting}
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+    +-+
+  - |*|: Tête de la liste des zones vides.
+    +-+
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+    +-+--------------------+
+  - |s|////bloc alloué/////| : Un bloc mémoire alloué.
+    +-+--------------------+
+     ^
+     |
+     +------ En tête du bloc alloué contenant la taille du bloc
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     +---------------+
+   - |C = {size', *} | : Une Cellule de la liste des zones vides
+     +---------------+
+\end{lstlisting}
+
+\begin{lstlisting}[columns=fixed,basicstyle=\scriptsize\ttfamily]
+     +---+-------------------------+-----------------------...-----------+
+   - | * | struct fb C = {size, *} |               libre                 |
+     +-|-+----------------------|--+-----------------------...-----------+
+       |  ^                     |
+       |__|                     +---->NULL
+
+       On représente le lien entre pointeur et l'objet pointé par une flèche.
+       Pour une meilleure lisibilité nous ne représentons pas les liens arrières de la liste
+       sur nos illustrations.
+\end{lstlisting}
+\end{document}

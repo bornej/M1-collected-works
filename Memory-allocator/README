@@ -1,0 +1,14 @@
+M1-INFO:
+Allocateur mémoire
+Techniques des systèmes d'exploitation.
+Borne Jonathan.
+
+Un allocateur mémoire minimaliste.
+
+Compiller et lancer les programmes de test:
+make
+
+Nettoyer:
+make clean
+
+Documentation dans le dossier Rapport.

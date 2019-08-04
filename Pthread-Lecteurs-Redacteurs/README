@@ -1,0 +1,10 @@
+# M1 Informatique IM2AG-UGA
+# Introduction to Operating Systems - TP8:
+# Borne Jonathan
+
+Solution au problème des lecteurs-rédacteurs à
+l'aide des primitives de synchronisation pthread.
+Trois politiques d'ordonnancement:
+- Priorité Lecteurs
+- Priorité Rédacteurs
+- FIFO -> to fix

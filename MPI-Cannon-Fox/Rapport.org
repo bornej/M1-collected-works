@@ -1,0 +1,266 @@
+#+TITLE: Algorithmes et Programmation Parallèle TP5 
+#+AUTHOR: Borne Jonathan et Isnel Maxime
+#+OPTIONS: toc:nil
+
+* Algorithme de Cannon
+On effectue la multiplication de matrices par bloc C = A*B à l'aide de l'algorithme de Cannon.
+On cherche à évaluer la complexité T de l'algorithme en fonction de la taille des entrées.
+** Complexité
+   On suppose qu'on se trouve dans le modèle 1-port.
+   Soit:
+     - n*n: Taille de la grille de processus
+     - N*n * N*n: Taille de la Matrice
+     - b: Temps pour communiquer un élément
+     - L: Latence
+  L'algorithme de Cannon se décompose en trois phases, preskew, n*compute, postskew.
+  On a T = Tpreskew + Tcompute + Tpostskew
+  
+*** Tpreskew
+  Pour i = 0:n-1:
+  On shifte la ligne i de A de i rang vers la gauche.
+  On travaille sur une topologie de tore donc les opération de shift peuvent être faites en parallèle.
+  Ainsi TshiftA = Max(TshiftLigneA) =  TshiftDernièreLigneA = (n-1)*(L + N*N*b).
+  
+  De manière similaire, on shifte la colonne i de B de i rang vers le haut.
+  TshiftB = (n-1)*(L + N*N*b).
+
+  Comme on se place dans le modèle 1-port on doit effectuer ces opérations successivement, ainsi
+  Tpreskew = TshiftA + TshiftB = 2((n-1)*(L + N*N*b)).
+  
+*** Tcompute
+  A chacune des n étapes de l'algorithme de Cannon
+  - on calcule une multiplication locale 
+    Ci_j = Ci_j + Ai_j*Bi_j
+    Avec Ai_j, Bi_j, Ci_j un bloc de matrice alloué au processus de coordonnées (i,j) dans le tore.
+  - on shifte A d'un bloc vers la gauche
+  - on shifte B d'un bloc vers le haut
+    Dans le modèle 1-port les opérations de shift se font successivement.
+    Soit Tmult le temps de la multiplication locale,
+    on a Tcompute = n(Tmult + 2(L + N*N*b)
+*** Tmult
+  Pour l'algorithme de multiplication naïve de matrices suivant:
+#+BEGIN_SRC Bash
+     for i=1:n
+        lire la ligne i de A dans le cache (n accès mémoire)
+        for j=1:n
+           lire la valeur C(i,j) dans le cache (1 accès mémoire)
+           lire la colonne j de B dans le cache (n accès mémoire) 
+           for k=1:n
+              C(i,j) = C(i,j) + A(i,k)*B(k,j) (2 opérations arithmétiques)
+           ecrire C(i,j) en mémoire (1 acces mémoire)
+#+END_SRC
+  On a alors:
+  - m = 3n^2 + n^3 accès mémoires
+  - o = 2*n^3 opérations arithmétiques
+  
+  Soit To le temps pour une opération arithmétique et Tm le temps d'accès mémoire, on a
+  Tmult = o*To + m*Tm
+  
+  
+*** Tpostskew
+  On termine l'algorithme par une phase de postskew de même coût que le préskew.
+  
+*** T
+  Ainsi on a T = 2(2((n-1)*(L + N*N*b))) + n(Tmult + 2(L + N*N*b)
+
+*** Optimisations
+    Nous pourrions envisager d'améliorer notre implémentation par les modifications suivantes:
+ - La multiplication de matrice pourrait être remplacée par une méthode provenant d'une librairie telle 
+   que BLAS.
+ - Dans les étapes pré et postskew on shifte la ligne n-1 de A de n-1 blocs vers la gauche.
+   On pourrait plutôt faire un shift de 1 rang vers la droite et tirer partie de 
+   la topologie de Tore. En choisissant un sens de déplacement approprié pour chaque ligne
+   on pourrait obtenir Max(TshiftligneA)= (n-1)/2 * (L + N*N*b) et donc réduire par 2 le
+   coût de preskew et de postskew.
+ - Si on suppose un modèle 2-port, on pourrait effectuer les opérations de shift de A et B
+ en parallèle dans les étapes de pré et postskew.
+
+
+* Algorithme de Fox
+On effectue la multiplication de matrices par bloc C = A*B à l'aide de l'algorithme de Fox.
+On cherche à évaluer la complexité T de l'algorithme en fonction de la taille des entrées.
+** Complexité
+   On suppose qu'on se trouve dans le modèle 1-port.
+   Soit:
+     - n*n: Taille de la grille de processus
+     - N*n * N*n: Taille de la Matrice
+     - b: Temps pour communiquer un élément
+     - L: Latence
+  Chaque étape de l'algorithme de Fox se décompose en trois phases, broadcast, compute, shift.
+  On a n étapes donc
+  T = n*(Tbroadcast + Tcompute + Tshift)
+  
+*** Tbroadcast
+  A la k-ième étape
+  Le processus i_i+k broadcaste son bloc A_i_i+k sur sa ligne.
+  On travaille sur une topologie de tore donc les opération de broadcast  
+  peuvent être faites en parallèle.
+  Ainsi Tbroadcast = (n-1)*(L + N*N*b).
+  
+*** Tcompute
+  A chacune des n étapes de l'algorithme de fox
+  - on calcule une multiplication locale 
+    Ci_j = Ci_j + Ai_j*Bi_j
+    Avec Ai_j, Bi_j, Ci_j un bloc de matrice alloué au processus de coordonnées (i,j) dans le tore.
+  - on shifte B d'un bloc vers le haut
+    Soit Tmult le temps de la multiplication locale,
+    on a Tcompute = (Tmult + (L + N*N*b)
+*** Tmult
+  Pour l'algorithme de multiplication naïve de matrices on a 
+  Tmult = o*To + m*Tm 
+
+*** T
+  Ainsi on a T = n *((n-1)*(L + N*N*b) + o*To + m*Tm)
+
+*** Optimisations
+    Nous pourrions envisager d'améliorer notre implémentation par les modifications suivantes:
+ - La multiplication de matrice pourrait être remplacée par une méthode provenant d'une librairie telle 
+   que BLAS.
+
+* Data Management
+Nous avons crée une méthode qui initialise un type MPI pour l'envoi de sous-blocs de matrices de taille N*N
+En partant d'une matrice de taille N*n * N*n.
+La méthode initialise les valeurs des paramètres pour l'opération de scatter (sendcounts, displacements).
+
+** Calcul des décalages
+#+BEGIN_SRC C
+       Soit la matrice M carrée 6x6:
+       0 0 0|1 1 1
+       0 0 0|1 1 1
+       0 0 0|1 1 1       A0|A1
+       -----------    =  --|--
+       2 2 2|3 3 3       A2|A3
+       2 2 2|3 3 3
+       2 2 2|3 3 3
+
+       On souhaite envoyer les sous-blocs A0, A1, A2, A3.
+       On a défini un sous-type correspondant à un bloc 3x3 dont case de départ
+       est la case M(0,0):
+
+       starts
+       |
+       v
+       0 0 0
+       0 0 0 = A0
+       0 0 0
+
+
+       On rappelle qu'en mémoire la matrice est stockée de la manière suivante.
+       M = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, ...}
+            ^
+            |
+         starts
+
+
+      - Afin d'envoyer A1,
+      On veut que starts pointe vers la l'indice de la première case de A1 = M(0,3) = M[0*6 + 3].
+      M = {0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, ...}
+                    ^
+                    |
+                  starts
+           starts
+             |
+             v
+       0 0 0|1 1 1
+       0 0 0|1 1 1
+       0 0 0|1 1 1
+
+      Avec M(i,j) la notation mathématique usuelle et M[k] la représentation mémoire de M.
+      Remarque:
+        De manière générale on a, soit M une matrice carrée NxN
+        M(i,j) = M[i*N + j].
+
+
+      - Afin d'envoyer A2,
+      On veut que starts pointe vers l'indice de la première case de A2 = M(3,0) = M[3*6 + 0] = M[18]
+      - Afin d'envoyer A3,
+      On veut que starts pointe vers l'indice de la première case de A3 = M(3,3) = M[3*6 + 3] = M[21]
+
+      Pour résumer on doit calculer les décalages pour trouver les indices des cases
+      M(0,0), M(0,3), M(3,0), M(3,3).
+      Ainsi on à les décalages displs = {0, 3, 18, 21} à effetuer en partant de M[0] pour envoyer successivement les
+      blocs A0, A1, A2, A3.
+
+      De manière générale si on a une matrice M de taille (N*n * N*n)
+      et que l'on veut envoyer des sous blocs de taille (N*N) à n*n processus, on doit calculer
+      les décalages pour les cases M(i*N, j*N) avec i,j dans [0, n-1].
+
+      On rappelle qu'on a M(i,j) = M[i*N + j] pour une matrice de taille N*N
+      Donc pour une matrice de taille (N*n)*(N*n) on a
+      M(i,j) = M[i*(N*n) + j]
+#+END_SRC
+
+* Fichiers et structure des répertoires
+** MPI_utils.c
+Nous avons placé les implémentationd de Fox et de Cannon dans le fichier MPI_utils.c
+avec un ensemble de méthode pour l'initialisation des communicateurs de grilles, de lignes,...
+** matrix_operations.c
+Un ensemble d'opération sur le matrices
+** Tests
+*** FoxSmallMatrix.c
+#+BEGIN_SRC C
+  Test de l'algorithme de fox sur l'exemple suivant:
+     A             B         C
+  0 0 1 0       1 0 1 0   1 0 1 0
+  0 0 0 1       0 1 0 1   0 1 0 1
+  2 0 3 0   X   1 0 1 0 = 5 0 5 0
+  0 2 0 3       0 1 0 1   0 5 0 5
+
+  On considère une grille de 4 processus, P0, P1, P2, P3.
+  On affecte à chaque processus les matrices Ai, Bi, Ci.
+  avec  A0   A1       B0   B1       C0   C1
+       0 0  1 0      1 0  1 0      0 0  0 0
+       0 0  0 1      0 1  0 1      0 0  0 0
+        A2   A3       B2   B3       C2   C3
+       2 0  3 0      1 0  1 0      0 0  0 0
+       0 2  0 3      0 1  0 1      0 0  0 0
+
+  On déroule l'algorithme de fox:
+  Etape 1:
+  On broadcaste la première diagonale de A et on effectue les multiplcations locales Ci=Ai*Bi
+  On obtient
+        A0   A1       B0   B1       C0   C1
+       0 0  0 0      1 0  1 0      0 0  0 0
+       0 0  0 0      0 1  0 1      0 0  0 0
+        A2   A3       B2   B3       C2   C3
+       3 0  3 0      1 0  1 0      3 0  3 0
+       0 3  0 3      0 1  0 1      0 3  0 3
+
+  Etape 2
+  On shifte B, on broadcast la seconde diagonale de A et on fait les multiplications locales
+  on obtient
+        A0   A1       B0   B1       C0   C1
+       1 0  1 0      1 0  1 0      1 0  1 0
+       0 1  0 1      0 1  0 1      0 1  0 1
+        A2   A3       B2   B3       C2   C3
+       2 0  2 0      1 0  1 0      5 0  5 0
+       0 2  0 2      0 1  0 1      0 5  0 5
+#+END_SRC
+Ecrit les résultats dans les fichiers ./Results/SmallMatrixFox/
+
+*** FoxLargeMatrix.c
+Même exemple que précédemment à l'exception que les bloc de matrices
+A,B,C sont de taille 1024. 
+A l'issu de l'algorithme:
+- P0 et P1 doivent avoir dans leur bloc C, la matrice identité.
+- P2 et P3 doivent avoir dans leur bloc C, une matrice avec la valeur 5 sur la diagonale,
+  0 ailleurs.
+A l'exécution le programme affiche OK si on a bien ces valeurs.
+*** CannonSmallMatrix.c et CannonLargeMatrix.c
+Similaire à FoxSmallmatrix et Foxlargematrix mais avec Cannon.
+
+*** FoxsmallMatrix_Data_Mgmt
+Programme de test de Fox avec gestion mémoire.
+On donne au processus 0 les matrices identité Global_A et Global_B de taille 4 * 4 .
+On envoie au processus 0,1,2,3 les sous-blocs de taille 2*2 on utilise l'algorithme de Fox
+et on reconstitue le résultat dans le processus 0 dans une matrice Global_C.
+Au final la matrice Global_C doit être la matrice identité.
+Le programme de test écrit les valeurs intermédiaires dans le dossier ./Results/SmallMatrixFox_DataMgmt/
+et affiche ok si Global_C est bien l'identité.
+
+*** FoxLargeMatrix_Data_Mgmt
+Similaire a FoxSmallmatrix_Data_Mgmt mais Global_A, Global_B et Global_C sont de tailles 2048*2048.
+*** CannonSmallMatrix_Data_Mgmt.c et CannonLargeMatrix_Data_Mgmt.c
+    Similaire à FoxSmallmatrix_Data et Foxlargematrix_Data mais avec Cannon.
+*** scatter_gather
+Programme de test pour les opérations de scattering et gathering.

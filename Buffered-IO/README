@@ -1,0 +1,16 @@
+# M1 Informatique IM2AG-UGA
+# Introduction to Operating Systems - TP8:
+# Borne Jonathan
+
+Implémentation d'une bibliothèque d'entrée-sortie bufferisée.
+Documentation dans le dossier Rapport.
+
+Compiler:
+make
+
+Lancer les test:
+make tests
+
+Nettoyer:
+make clean
+
